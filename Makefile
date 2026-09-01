@@ -81,8 +81,8 @@ else ifeq ($(platform), ps2)
    CC = mips64r5900el-ps2-elf-gcc
    CXX = mips64r5900el-ps2-elf-g++
    AR = mips64r5900el-ps2-elf-ar
-   CFLAGS += -G0 -O3 -ffast-math -DPS2 -DABGR1555
-   CXXFLAGS += -G0 -O3 -ffast-math -DPS2 -DABGR1555
+   CFLAGS += -G0 -DPS2 -DABGR1555
+   CXXFLAGS += -G0 -DPS2 -DABGR1555
    STATIC_LINKING=1
 
 # iOS
