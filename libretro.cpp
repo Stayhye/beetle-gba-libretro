@@ -214,12 +214,13 @@ bool retro_load_game_special(unsigned, const struct retro_game_info *, size_t)
    return false;
 }
 
-static int setting_gba_hle = 1; // Default to HLE enabled to prevent missing BIOS crashes
-static bool use_mednafen_save_method = false;
-
 static void check_variables(bool startup)
 {
    struct retro_variable var = {0};
+
+   // Default to HLE enabled (setting_gba_hle is declared externally as uint32_t)
+   if (startup)
+      setting_gba_hle = 1;
 
    var.key = "gba_hle";
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -228,10 +229,6 @@ static void check_variables(bool startup)
          setting_gba_hle = 0;
       else
          setting_gba_hle = 1;
-   }
-   else if (startup)
-   {
-      setting_gba_hle = 1; // Fallback to enabled if variable is missing from frontend
    }
 
    var.key = "gba_use_mednafen_save_method";
@@ -324,7 +321,6 @@ bool retro_load_game(const struct retro_game_info *info)
    descs[1].len    = 0x40000;
    descs[1].select = 0xFF000000;
 
-   // TODO: if SRAM is flash, use start=0 addrspace="S" instead
    descs[2].ptr    = flashSaveMemory;  // Save RAM
    descs[2].start  = 0x0E000000;
    descs[2].len    = flashSize;
@@ -360,6 +356,7 @@ bool retro_load_game(const struct retro_game_info *info)
 
    return game;
 }
+
 void retro_unload_game()
 {
    if (!game)
