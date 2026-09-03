@@ -214,22 +214,27 @@ bool retro_load_game_special(unsigned, const struct retro_game_info *, size_t)
    return false;
 }
 
+static int setting_gba_hle = 1; // Default to HLE enabled to prevent missing BIOS crashes
+static bool use_mednafen_save_method = false;
+
 static void check_variables(bool startup)
 {
    struct retro_variable var = {0};
 
    var.key = "gba_hle";
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && startup)
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      if (strcmp(var.value, "enabled") == 0)
-         setting_gba_hle = 1;
-      else if (strcmp(var.value, "disabled") == 0)
+      if (strcmp(var.value, "disabled") == 0)
          setting_gba_hle = 0;
+      else
+         setting_gba_hle = 1;
+   }
+   else if (startup)
+   {
+      setting_gba_hle = 1; // Fallback to enabled if variable is missing from frontend
    }
 
    var.key = "gba_use_mednafen_save_method";
-
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && startup)
    {
       if (strcmp(var.value, "mednafen") == 0)
@@ -248,9 +253,7 @@ static void hookup_ports(bool force)
    if (initial_ports_hookup && !force)
       return;
 
-   // Possible endian bug ...
    SetInput(0, "gamepad", &input_buf);
-
    initial_ports_hookup = true;
 }
 
@@ -270,9 +273,8 @@ bool retro_load_game(const struct retro_game_info *info)
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,     "R" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,     "Solar Level Decrease" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,     "Solar Level Increase" },
-
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,    "Solar Level Decrease" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,    "Solar Level Increase" },
       { 0 },
    };
 
@@ -283,9 +285,13 @@ bool retro_load_game(const struct retro_game_info *info)
    if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
    {
       if (log_cb)
-         log_cb(RETRO_LOG_ERROR, "Pixel format XRGB8888 not supported by platform, cannot use %s.\n", MEDNAFEN_CORE_NAME);
-      return false;
+         log_cb(RETRO_LOG_ERROR, "Pixel format XRGB8888 not supported, falling back to RGB565.\n");
+      fmt = RETRO_PIXEL_FORMAT_RGB565;
+      environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
    }
+#else
+   enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
+   environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
 #endif
 
    set_basename(info->path);
@@ -324,22 +330,22 @@ bool retro_load_game(const struct retro_game_info *info)
    descs[2].len    = flashSize;
    descs[2].select = 0;
 
-   descs[3].ptr    = vram;           // VRAM
+   descs[3].ptr    = vram;            // VRAM
    descs[3].start  = 0x06000000;
    descs[3].len    = 0x20000;
    descs[3].select = 0xFF000000;
 
-   descs[4].ptr    = paletteRAM;     // Palettes
+   descs[4].ptr    = paletteRAM;      // Palettes
    descs[4].start  = 0x05000000;
    descs[4].len    = 0x400;
    descs[4].select = 0xFF000000;
 
-   descs[5].ptr    = oam;            // OAM
+   descs[5].ptr    = oam;             // OAM
    descs[5].start  = 0x07000000;
    descs[5].len    = 0x400;
    descs[5].select = 0xFF000000;
 
-   descs[6].ptr    = ioMem;          // I/O
+   descs[6].ptr    = ioMem;           // I/O
    descs[6].start  = 0x04000000;
    descs[6].len    = 0x400;
    descs[6].select = 0;
@@ -349,12 +355,11 @@ bool retro_load_game(const struct retro_game_info *info)
 
    environ_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &retromap);
 
-   bool retroarchievement = true;
-   environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &retroarchievement);
+   bool retroachievement = true;
+   environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &retroachievement);
 
    return game;
 }
-
 void retro_unload_game()
 {
    if (!game)
