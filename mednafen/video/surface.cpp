@@ -62,8 +62,8 @@ MDFN_Surface::MDFN_Surface(void *const p_pixels, const uint32 p_width, const uin
 
 void MDFN_Surface::Init(void *const p_pixels, const uint32 p_width, const uint32 p_height, const uint32 p_pitchinpix, const MDFN_PixelFormat &nf)
 {
-   void *rpix = NULL;
-   assert(nf.bpp == 16 || nf.bpp == 32);
+   void *rpix = p_pixels;
+   assert(nf.bpp == 16 || nf.bpp == 32 || nf.bpp == 8);
 
    format = nf;
 
@@ -73,32 +73,34 @@ void MDFN_Surface::Init(void *const p_pixels, const uint32 p_width, const uint32
    palette = NULL;
 #endif
 
-   if(!(rpix = calloc(1, p_pitchinpix * p_height * (nf.bpp / 8))))
-      throw(1);
+   if (!rpix)
+   {
+      if(!(rpix = calloc(1, p_pitchinpix * p_height * (nf.bpp / 8))))
+         throw(1);
+   }
 
+   // Dynamically bind pointers based on runtime bpp to ensure video output is never dropped
+   if (nf.bpp == 16)
+   {
+      pixels16 = (uint16 *)rpix;
+   }
+   else if (nf.bpp == 32)
+   {
+      pixels = (uint32 *)rpix;
+   }
 #if defined(WANT_8BPP)
-   //if(nf.bpp == 8)
+   else if (nf.bpp == 8)
    {
       pixels8 = (uint8 *)rpix;
       palette = (MDFN_PaletteEntry*)calloc(sizeof(MDFN_PaletteEntry), 256);
    }
-#elif defined(WANT_16BPP)
-   //if(nf.bpp == 16)
-      pixels16 = (uint16 *)rpix;
-#elif defined(WANT_32BPP)
-   //else
-      pixels = (uint32 *)rpix;
 #endif
 
    w = p_width;
    h = p_height;
-
    pitchinpix = p_pitchinpix;
 }
 
-// When we're converting, only convert the w*h area(AKA leave the last part of the line, pitch32 - w, alone),
-// for places where we store auxillary information there(graphics viewer in the debugger), and it'll be faster
-// to boot.
 void MDFN_Surface::SetFormat(const MDFN_PixelFormat &nf, bool convert)
 {
    format = nf;
@@ -106,17 +108,28 @@ void MDFN_Surface::SetFormat(const MDFN_PixelFormat &nf, bool convert)
 
 MDFN_Surface::~MDFN_Surface()
 {
-#if defined(WANT_16BPP)
-   if(pixels16)
-      free(pixels16);
-#elif defined(WANT_32BPP)
-   if(pixels)
-      free(pixels);
-#elif defined(WANT_8BPP)
-   pixels8 = NULL;
-   if(palette)
-      free(palette);
-   palette = NULL;
-#endif
-}
+   void *target_ptr = NULL;
 
+   if (pixels16)
+      target_ptr = pixels16;
+   else if (pixels)
+      target_ptr = pixels;
+#if defined(WANT_8BPP)
+   else if (pixels8)
+      target_ptr = pixels8;
+   
+   if(palette)
+   {
+      free(palette);
+      palette = NULL;
+   }
+#endif
+
+   if(target_ptr)
+   {
+      free(target_ptr);
+   }
+
+   pixels = NULL;
+   pixels16 = NULL;
+}
