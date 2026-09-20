@@ -263,7 +263,11 @@ static void hookup_ports(bool force)
 bool retro_load_game(const struct retro_game_info *info)
 {
    if (!info || failed_init)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "PS2 Port: Invalid game info pointer or failed init state.\n");
       return false;
+   }
 
    struct retro_input_descriptor desc[] = {
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
@@ -283,32 +287,45 @@ bool retro_load_game(const struct retro_game_info *info)
 
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
-#ifdef WANT_32BPP
-   enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+   // Force RGB565 format for PS2 hardware layout
+   enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
    if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
    {
       if (log_cb)
-         log_cb(RETRO_LOG_ERROR, "Pixel format XRGB8888 not supported, falling back to RGB565.\n");
-      fmt = RETRO_PIXEL_FORMAT_RGB565;
-      environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
+         log_cb(RETRO_LOG_ERROR, "PS2 Port: Failed to set RGB565 pixel format.\n");
    }
-#else
-   enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
-   environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
-#endif
 
    set_basename(info->path);
 
    check_variables(true);
 
+   // Guard against empty or invalid ROM data buffers
+   if (!info->data || info->size == 0)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "PS2 Port: ROM data buffer is empty or null.\n");
+      return false;
+   }
+
    game = MDFNI_LoadGame(MEDNAFEN_CORE_NAME_MODULE, (const uint8_t *)info->data, info->size);
    if (!game)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "PS2 Port: MDFNI_LoadGame failed to initialize GBA core module.\n");
       return false;
+   }
 
+   // Initialize pixel format with standard RGB layout (red/blue swap handled in retro_run patch)
    MDFN_PixelFormat pix_fmt(MDFN_COLORSPACE_RGB, 16, 8, 0, 24);
    last_pixel_format = MDFN_PixelFormat();
 
    surf = new MDFN_Surface(NULL, FB_WIDTH, FB_HEIGHT, FB_WIDTH, pix_fmt);
+   if (!surf)
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "PS2 Port: Failed to allocate MDFN_Surface.\n");
+      return false;
+   }
 
    hookup_ports(true);
 
@@ -317,37 +334,37 @@ bool retro_load_game(const struct retro_game_info *info)
 
    memset(descs, 0, sizeof(descs));
 
-   descs[0].ptr    = internalRAM;    // Internal working RAM
+   descs[0].ptr    = internalRAM;    
    descs[0].start  = 0x03000000;
    descs[0].len    = 0x8000;
    descs[0].select = 0xFF000000;
 
-   descs[1].ptr    = workRAM;        // Working RAM
+   descs[1].ptr    = workRAM;        
    descs[1].start  = 0x02000000;
    descs[1].len    = 0x40000;
    descs[1].select = 0xFF000000;
 
-   descs[2].ptr    = flashSaveMemory;  // Save RAM
+   descs[2].ptr    = flashSaveMemory;  
    descs[2].start  = 0x0E000000;
    descs[2].len    = flashSize;
    descs[2].select = 0;
 
-   descs[3].ptr    = vram;            // VRAM
+   descs[3].ptr    = vram;            
    descs[3].start  = 0x06000000;
    descs[3].len    = 0x20000;
    descs[3].select = 0xFF000000;
 
-   descs[4].ptr    = paletteRAM;      // Palettes
+   descs[4].ptr    = paletteRAM;      
    descs[4].start  = 0x05000000;
    descs[4].len    = 0x400;
    descs[4].select = 0xFF000000;
 
-   descs[5].ptr    = oam;             // OAM
+   descs[5].ptr    = oam;             
    descs[5].start  = 0x07000000;
    descs[5].len    = 0x400;
    descs[5].select = 0xFF000000;
 
-   descs[6].ptr    = ioMem;           // I/O
+   descs[6].ptr    = ioMem;           
    descs[6].start  = 0x04000000;
    descs[6].len    = 0x400;
    descs[6].select = 0;
@@ -360,7 +377,7 @@ bool retro_load_game(const struct retro_game_info *info)
    bool retroachievement = true;
    environ_cb(RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS, &retroachievement);
 
-   return game;
+   return true;
 }
 
 void retro_unload_game()
