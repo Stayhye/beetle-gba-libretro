@@ -86,7 +86,6 @@ else ifeq ($(platform), ps2)
     CXXFLAGS += -Os -march=r5900 -mtune=r5900 -G0 -ffast-math -fomit-frame-pointer -DPS2 -D_EE -DABGR1555 -fno-expensive-optimizations -fcommon -Wno-error=overloaded-virtual $(PS2SDK_INCS)
     LDFLAGS += -Wl,--allow-multiple-definition
     STATIC_LINKING = 1
-    STATIC_LINKING_LINK = 1
     PLATFORM_DEFINES := -DPS2 -D_EE -DVIDEO_ABGR1555 -DIOAPI_NO_64
     FRONTEND_SUPPORTS_RGB565 = 0
 
