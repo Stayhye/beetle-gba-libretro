@@ -152,7 +152,7 @@ void retro_init(void)
    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) && dir)
    {
       retro_base_directory = dir;
-      // Make sure that we don't have any lingering slashes, etc., as they break Windows.
+      // Strip trailing slashes to avoid path resolution bugs on PS2 file systems
       size_t last = retro_base_directory.find_last_not_of("/\\");
       if (last != std::string::npos)
          last++;
@@ -161,7 +161,6 @@ void retro_init(void)
    }
    else
    {
-      /* Fallback instead of aborting initialization */
       if (log_cb)
          log_cb(RETRO_LOG_WARN, "System directory is not defined. Falling back to default path...\n");
       retro_base_directory = ".";
@@ -169,9 +168,7 @@ void retro_init(void)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dir) && dir)
    {
-      // If save directory is defined use it, otherwise use system directory
       retro_save_directory = *dir ? dir : retro_base_directory;
-      // Make sure that we don't have any lingering slashes, etc., as they break Windows.
       size_t last = retro_save_directory.find_last_not_of("/\\");
       if (last != std::string::npos)
          last++;
@@ -181,14 +178,23 @@ void retro_init(void)
    else
    {
       if (log_cb)
-         log_cb(RETRO_LOG_WARN, "Save directory is not defined. Fallback on using SYSTEM directory ...\n");
+         log_cb(RETRO_LOG_WARN, "Save directory is not defined. Fallback on using SYSTEM directory...\n");
       retro_save_directory = retro_base_directory;
    }
 
-#if defined(WANT_16BPP) && defined(FRONTEND_SUPPORTS_RGB565)
+#if defined(WANT_16BPP)
+   // Force RGB565 for PS2 hardware layout; our retro_run pixel patch handles the red/blue channel swap
    enum retro_pixel_format rgb565 = RETRO_PIXEL_FORMAT_RGB565;
-   if (environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &rgb565) && log_cb)
-      log_cb(RETRO_LOG_INFO, "Frontend supports RGB565 - will use that instead of XRGB1555.\n");
+   if (environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &rgb565))
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_INFO, "PS2 Port: Pixel format successfully set to RGB565.\n");
+   }
+   else
+   {
+      if (log_cb)
+         log_cb(RETRO_LOG_ERROR, "PS2 Port: Failed to set RGB565 pixel format.\n");
+   }
 #endif
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_PERF_INTERFACE, &perf_cb))
