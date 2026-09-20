@@ -462,6 +462,22 @@ static void update_input(void)
    }
 }
 
+static void convert_pixel_format_16bit(const uint16_t *src, uint16_t *dst, unsigned width, unsigned height)
+{
+   unsigned total = width * height;
+   for (unsigned i = 0; i < total; i++)
+   {
+      uint16_t p = src[i];
+      // Extract RGB channels
+      uint16_t r = (p >> 11) & 0x1F;
+      uint16_t g = (p >> 5) & 0x3F;
+      uint16_t b = p & 0x1F;
+
+      // Swap red and blue channels and repack
+      dst[i] = (b << 11) | (g << 5) | r;
+   }
+}
+
 void retro_run()
 {
    input_poll_cb();
@@ -506,8 +522,13 @@ void retro_run()
    const uint32_t *pix = surf->pixels;
    video_cb(pix, width, height, FB_WIDTH << 2);
 #elif defined(WANT_16BPP)
-   const uint16_t *pix = surf->pixels16;
-   video_cb(pix, width, height, FB_WIDTH << 1);
+   const uint16_t *raw_pix = surf->pixels16;
+   static uint16_t converted_pix[FB_WIDTH * FB_HEIGHT];
+   
+   // Apply pixel patch to convert and swap channels before passing to video callback
+   convert_pixel_format_16bit(raw_pix, converted_pix, width, height);
+   
+   video_cb(converted_pix, width, height, FB_WIDTH << 1);
 #endif
 
    audio_batch_cb(spec.SoundBuf, spec.SoundBufSize);
